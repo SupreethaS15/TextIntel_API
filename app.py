@@ -1,25 +1,20 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+from flask import Flask, request, jsonify
 from langdetect import detect
 from transformers import pipeline
 import spacy
 
-app = FastAPI()
+app = Flask(__name__)
 
-@app.get("/")
+# ✅ Health Check Route
+@app.route("/", methods=["GET"])
 def health():
-    return {"status": "OK"}
+    return jsonify({"status": "OK"})
 
-# Load pipelines
+# 🧠 Load NLP models once
 summarizer = pipeline("summarization", model="t5-small")
 translator = pipeline("translation", model="t5-small")
 rephraser = pipeline("text2text-generation", model="t5-small")
 nlp = spacy.load("en_core_web_sm")
-
-class InputPayload(BaseModel):
-    text: str
-    tone: str = "Professional"
-    target_lang: str = "en"
 
 def extract_tags(text):
     doc = nlp(text)
@@ -32,33 +27,38 @@ def extract_tags(text):
     }
     return tags
 
-@app.post("/process_text")
-def process_text(payload: InputPayload):
-    original_text = payload.text
+@app.route("/process_text", methods=["POST"])
+def process_text():
+    data = request.get_json()
+    text = data.get("text")
+    tone = data.get("tone", "Professional")
+    target_lang = data.get("target_lang", "en")
 
-    # 🔍 Detect Language
-    detected_lang = detect(original_text)
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
 
-    # 🌐 Translate to English if needed
+    # 🔍 Language detection
+    detected_lang = detect(text)
+
+    # 🌐 Translation
+    translated = text
     if detected_lang != "en":
-        translated = translator(original_text)[0]['translation_text']
-    else:
-        translated = original_text
+        translated = translator(text)[0]["translation_text"]
 
-    # 📝 Summarize
+    # ✂️ Summarize
     summary = summarizer(translated, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
 
-    # ✍️ Rephrase tone
-    prompt = f"Rewrite this in a {payload.tone} tone: {summary}"
-    rephrased = rephraser(prompt, max_length=60)[0]['generated_text']
+    # 📝 Tone Rephrasing
+    prompt = f"Rewrite this in a {tone} tone: {summary}"
+    rephrased = rephraser(prompt, max_length=60)[0]["generated_text"]
 
     # 🏷️ Tags
     tags = extract_tags(translated)
 
-    return {
+    return jsonify({
         "original_language": detected_lang,
         "translated_input": translated,
         "summary": summary,
         "rephrased_summary": rephrased,
         "tags": tags
-    }
+    })
