@@ -62,3 +62,9 @@ def process_text():
         "rephrased_summary": rephrased,
         "tags": tags
     })
+
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 10000))  # Render sets PORT env var
+    app.run(host="0.0.0.0", port=port)
+
