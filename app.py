@@ -6,6 +6,10 @@ import spacy
 
 app = FastAPI()
 
+@app.get("/")
+def health():
+    return {"status": "OK"}
+
 # Load pipelines
 summarizer = pipeline("summarization", model="t5-small")
 translator = pipeline("translation", model="t5-small")
